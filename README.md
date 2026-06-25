@@ -359,12 +359,189 @@ The Python application:
 
 ---
 
-## Simulation Files
+## Simulation code
 
-wokwi link
+wokwi code
 
 ```
-[Click here to visit Wokwi](https://wokwi.com/projects/458891527160648705)
+#include <SPI.h>
+#include <MFRC522.h>
+#include <Wire.h>
+#include <RTClib.h>
+#include <EEPROM.h>
+#include <LiquidCrystal.h>
+
+#define SS_PIN 10
+#define RST_PIN 9
+
+MFRC522 rfid(SS_PIN, RST_PIN);
+RTC_DS1307 rtc;
+
+// LCD (RS, E, D4, D5, D6, D7)
+LiquidCrystal lcd(7, 6, 5, 4, 3, 2);
+
+// ---------------- CARD UIDs ----------------
+byte blueUID[4]  = {0x01, 0x02, 0x03, 0x04};
+byte greenUID[4] = {0x11, 0x22, 0x33, 0x44};
+byte redUID[4]   = {0xAA, 0xBB, 0xCC, 0xDD};
+
+// ---------------- EEPROM ----------------
+#define DAY_ADDR     0
+#define MONTH_ADDR   1
+#define YEAR_ADDR    2
+#define BLUE_ADDR    3
+#define GREEN_ADDR   4
+#define RED_ADDR     5
+
+bool blueScanned;
+bool greenScanned;
+bool redScanned;
+
+void setup() {
+
+  Serial.begin(9600);
+  SPI.begin();
+  rfid.PCD_Init();
+  Wire.begin();
+
+  lcd.begin(16, 2);
+  lcd.print("RFID Attendance");
+  delay(2000);
+  lcd.clear();
+
+  if (!rtc.begin()) {
+    lcd.print("RTC ERROR");
+    while (1);
+  }
+
+  if (!rtc.isrunning()) {
+    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  }
+
+  DateTime now = rtc.now();
+
+  // Reset daily attendance
+  if (EEPROM.read(DAY_ADDR) != now.day() ||
+      EEPROM.read(MONTH_ADDR) != now.month() ||
+      EEPROM.read(YEAR_ADDR) != (now.year() % 100)) {
+
+    EEPROM.write(DAY_ADDR, now.day());
+    EEPROM.write(MONTH_ADDR, now.month());
+    EEPROM.write(YEAR_ADDR, now.year() % 100);
+
+    EEPROM.write(BLUE_ADDR, 0);
+    EEPROM.write(GREEN_ADDR, 0);
+    EEPROM.write(RED_ADDR, 0);
+  }
+
+  blueScanned  = EEPROM.read(BLUE_ADDR);
+  greenScanned = EEPROM.read(GREEN_ADDR);
+  redScanned   = EEPROM.read(RED_ADDR);
+
+  lcd.print("Scan Card...");
+}
+
+void loop() {
+
+  if (!rfid.PICC_IsNewCardPresent()) return;
+  if (!rfid.PICC_ReadCardSerial()) return;
+
+  DateTime now = rtc.now();
+
+  int hour = now.hour();
+  int minute = now.minute();
+  int second = now.second();
+
+  lcd.clear();
+
+  // ---------------- BLUE ----------------
+  if (checkUID(blueUID)) {
+
+    lcd.print("Blue Card");
+
+    if (blueScanned) {
+      lcd.setCursor(0, 1);
+      lcd.print("Already Marked");
+    } else {
+      lcd.setCursor(0, 1);
+      showAttendance(hour, minute, second);
+      blueScanned = true;
+      EEPROM.write(BLUE_ADDR, 1);
+    }
+  }
+
+  // ---------------- GREEN ----------------
+  else if (checkUID(greenUID)) {
+
+    lcd.print("Green Card");
+
+    if (greenScanned) {
+      lcd.setCursor(0, 1);
+      lcd.print("Already Marked");
+    } else {
+      lcd.setCursor(0, 1);
+      showAttendance(hour, minute, second);
+      greenScanned = true;
+      EEPROM.write(GREEN_ADDR, 1);
+    }
+  }
+
+  // ---------------- RED ----------------
+  else if (checkUID(redUID)) {
+
+    lcd.print("Red Card");
+
+    if (redScanned) {
+      lcd.setCursor(0, 1);
+      lcd.print("Already Marked");
+    } else {
+      lcd.setCursor(0, 1);
+      showAttendance(hour, minute, second);
+      redScanned = true;
+      EEPROM.write(RED_ADDR, 1);
+    }
+  }
+
+  else {
+    lcd.print("Unknown Card");
+  }
+
+  delay(3000);
+  lcd.clear();
+  lcd.print("Scan Card...");
+
+  rfid.PICC_HaltA();
+  rfid.PCD_StopCrypto1();
+}
+
+// ---------------- UID CHECK ----------------
+bool checkUID(byte *card) {
+  for (byte i = 0; i < 4; i++) {
+    if (rfid.uid.uidByte[i] != card[i])
+      return false;
+  }
+  return true;
+}
+
+// ---------------- LCD ATTENDANCE ----------------
+void showAttendance(int hour, int minute, int second) {
+
+  if (hour < 9 || (hour == 9 && minute < 12)) {
+    lcd.print("PRESENT ");
+  }
+  else if (hour == 9 && minute <= 13) {
+    lcd.print("LATE ");
+  }
+  else {
+    lcd.print("ABSENT ");
+  }
+
+  lcd.print(hour);
+  lcd.print(":");
+
+  if (minute < 10) lcd.print("0");
+  lcd.print(minute);
+}
 ```
 
 The Wokwi simulation includes:
@@ -379,11 +556,8 @@ The Wokwi simulation includes:
 
 ## Circuit Diagram
 
-Location:
+![image.alt](https://github.com/Abiramisankar0425/RFID-Based-Attendance-System-Time-Based-Intelligence/blob/5ec0c73be6c32aa09a92c5f5684f9013e98771d2/circute.png)
 
-```text
-Circuit_Diagram/circuit_diagram.png
-```
 
 The circuit diagram illustrates the connections between:
 
@@ -421,43 +595,14 @@ and the attendance record is not duplicated.
 
 ## Simulated Output
 
-Location:
+![image.alt](https://github.com/Abiramisankar0425/RFID-Based-Attendance-System-Time-Based-Intelligence/blob/5ec0c73be6c32aa09a92c5f5684f9013e98771d2/simulation_result.png)
 
-```text
-Simulated_Output/
-```
-
-### Startup Screen
-
-```text
-RFID Attendance
-Scan Card...
-```
-
-### Present Status
-
-```text
-Ramesh
-PRESENT 09:05
-```
-
-### Late Status
-
-```text
-Rose
-LATE 09:21
-```
-
-### Duplicate Scan Detection
-
-```text
-Jack
-Already Marked
-```
-
-### Excel Output
+## Excel Output
 
 Attendance records generated during simulation.
+
+
+![image.alt](https://github.com/Abiramisankar0425/RFID-Based-Attendance-System-Time-Based-Intelligence/blob/5ec0c73be6c32aa09a92c5f5684f9013e98771d2/excel_output.png)
 
 ---
 
@@ -465,9 +610,9 @@ Attendance records generated during simulation.
 
 Location:
 
-```text
-Real_Output/
-```
+
+![image.alt](https://github.com/Abiramisankar0425/RFID-Based-Attendance-System-Time-Based-Intelligence/blob/5ec0c73be6c32aa09a92c5f5684f9013e98771d2/real_output.png)
+
 
 Include:
 
