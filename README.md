@@ -364,7 +364,7 @@ The Python application:
 wokwi link
 
 ```
-https://wokwi.com/projects/458891527160648705
+[Click here to visit Wokwi](https://wokwi.com/projects/458891527160648705)
 ```
 
 The Wokwi simulation includes:
